@@ -552,7 +552,7 @@ export function parseFormat(
     "THH:mm:ss"
   );
   function replaceWithAmPm(timeFormat: string) {
-    return function (match: string, whitespace: string, amPm: string) {
+    return function (whitespace: string) {
       return (
         timeFormat + whitespace + "a" // date-fns: a (AM/PM)
       );
@@ -768,7 +768,6 @@ export function parseFormat(
 // we try to make a smart decision to identify the order
 function replaceEndian(
   options: any,
-  matchedPart: string,
   first: string,
   separator: string,
   second: string,
