@@ -413,7 +413,11 @@ function parseDateStringToFormats(dateString: string): ParseResult {
     typeof dateString !== "string" ||
     dateString.trim().length === 0
   ) {
-    throw new Error("Input must be a non-empty string");
+    return {
+      originalString: dateString,
+      interpretations: [],
+      hasAmbiguity: false,
+    };
   }
 
   const definitiveMatches: MatchResult[] = [];
