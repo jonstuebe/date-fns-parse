@@ -435,7 +435,7 @@ export function parseFormat(
 ): string | undefined {
   var format = dateString.toString();
 
-  options = options || {};
+  options = options || { locale: "en-US" };
 
   // Determine order from locale or fallback to defaultOrder
   let order: { [sep: string]: "MDY" | "DMY" | "YMD" } = defaultOrder;
@@ -763,11 +763,13 @@ export function parseFormat(
   return format;
 }
 
-// if we can't find an endian based on the separator, but
-// there still is a short date with day, month & year,
-// we try to make a smart decision to identify the order
+// Define a type for the options argument
+interface ReplaceEndianOptions {
+  preferredOrder: string | { [sep: string]: string };
+}
+
 function replaceEndian(
-  options: any,
+  options: ReplaceEndianOptions,
   first: string,
   separator: string,
   second: string,
@@ -805,7 +807,9 @@ function replaceEndian(
   const secondNum = parseInt(second, 10);
   const thirdNum = parseInt(third, 10);
   parts = [first, second, third];
-  preferredOrder = preferredOrder.toUpperCase();
+  // Safeguard: ensure preferredOrder is a string, fallback to 'MDY' if not
+  preferredOrder =
+    typeof preferredOrder === "string" ? preferredOrder.toUpperCase() : "MDY";
 
   var inferSingleDigitStatus = function (a: number, b: number) {
     if (isSingleDigitMap[a] !== isSingleDigitMap[b]) {
