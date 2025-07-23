@@ -1,434 +1,301 @@
-import { describe, it, expect } from "vitest";
-import { parseFormat, locales } from "./parse";
+/**
+ * Comprehensive test suite for the date format parser using Bun test framework
+ * Tests US format prioritization, ambiguity detection, and edge cases
+ */
 
-describe("parseFormat", () => {
-  describe("Basic functionality", () => {
-    it("should return undefined for empty string", () => {
-      expect(parseFormat("")).toBeUndefined();
+import { test, expect, describe } from "bun:test";
+import {
+  parseDateStringToFormats,
+  getDateFormats,
+  getBestDateFormat,
+} from "./parse";
+
+describe("Date Format Parser", () => {
+  describe("US Format Prioritization", () => {
+    test("should prioritize US format MM/dd/yyyy over dd/MM/yyyy", () => {
+      const formats = getDateFormats("03/10/1990");
+      expect(formats).toEqual(["MM/dd/yyyy", "dd/MM/yyyy"]);
+      expect(formats[0]).toBe("MM/dd/yyyy"); // US format first
     });
 
-    it("should handle null/undefined input gracefully", () => {
-      expect(() => parseFormat(null as any)).toThrow();
-      expect(() => parseFormat(undefined as any)).toThrow();
+    test("should prioritize US format M/d/yy over d/M/yy", () => {
+      const formats = getDateFormats("3/5/90");
+      expect(formats).toEqual(["M/d/yy", "d/M/yy"]);
+      expect(formats[0]).toBe("M/d/yy"); // US format first
     });
 
-    it("should use default locale when none provided", () => {
-      const result = parseFormat("01/02/2023");
-      expect(result).toBeDefined();
-    });
-  });
-
-  describe("Unix timestamps", () => {
-    it("should handle Unix millisecond timestamps", () => {
-      expect(parseFormat("1640995200000")).toBe("[T]");
+    test("should return only US format when day > 12 (unambiguous)", () => {
+      const formats = getDateFormats("12/25/1990");
+      expect(formats).toEqual(["MM/dd/yyyy"]);
     });
 
-    it("should handle Unix timestamps", () => {
-      expect(parseFormat("1640995200")).toBe("[t]");
-    });
-  });
-
-  describe("Filling words", () => {
-    it('should escape filling words like "at"', () => {
-      expect(parseFormat("Jan 1 at 12:00")).toContain("[at]");
-    });
-  });
-
-  describe("Day-Month-Year patterns", () => {
-    it("should handle day with leading zero, month name, and year", () => {
-      expect(parseFormat("01 January 2023")).toBe("dd MMMM yyyy");
+    test("should return only international format when month > 12 (unambiguous)", () => {
+      const formats = getDateFormats("25/12/1990");
+      expect(formats).toEqual(["dd/MM/yyyy"]);
     });
 
-    it("should handle day without leading zero, month name, and year", () => {
-      expect(parseFormat("1 January 2023")).toBe("d MMMM yyyy");
-    });
-
-    it("should handle day, abbreviated month, and year", () => {
-      expect(parseFormat("1 Jan 2023")).toBe("d MMM yyyy");
-    });
-
-    it("should handle day, month, and short year with apostrophe", () => {
-      expect(parseFormat("1 Jan '23")).toBe("d MMM 'yy");
-    });
-
-    it("should handle various separators", () => {
-      expect(parseFormat("1-January-2023")).toBe("d-MMMM-yyyy");
-      expect(parseFormat("1.January.2023")).toBe("d.MMMM.yyyy");
-      expect(parseFormat("1/January/2023")).toBe("d/MMMM/yyyy");
+    test("getBestDateFormat should return US format first", () => {
+      const best = getBestDateFormat("03/10/1990");
+      expect(best).toBe("MM/dd/yyyy");
     });
   });
 
-  describe("Day names", () => {
-    it("should handle full day names", () => {
-      expect(parseFormat("Monday")).toBe("EEEE");
-      expect(parseFormat("Tuesday")).toBe("EEEE");
-      expect(parseFormat("Wednesday")).toBe("EEEE");
-      expect(parseFormat("Thursday")).toBe("EEEE");
-      expect(parseFormat("Friday")).toBe("EEEE");
-      expect(parseFormat("Saturday")).toBe("EEEE");
-      expect(parseFormat("Sunday")).toBe("EEEE");
+  describe("Unambiguous Date Formats", () => {
+    test("should correctly parse full month names", () => {
+      const formats = getDateFormats("March 10, 1990");
+      expect(formats).toEqual(["MMMM dd, yyyy"]);
     });
 
-    it("should handle abbreviated day names", () => {
-      expect(parseFormat("Mon")).toBe("EEE");
-      expect(parseFormat("Tue")).toBe("EEE");
-      expect(parseFormat("Wed")).toBe("EEE");
-      expect(parseFormat("Thu")).toBe("EEE");
-      expect(parseFormat("Fri")).toBe("EEE");
-      expect(parseFormat("Sat")).toBe("EEE");
-      expect(parseFormat("Sun")).toBe("EEE");
+    test("should correctly parse short month names", () => {
+      const formats = getDateFormats("Mar 10, 1990");
+      expect(formats).toEqual(["MMM dd, yyyy"]);
     });
 
-    it("should handle shortest day names", () => {
-      expect(parseFormat("Su")).toBe("EE");
-      expect(parseFormat("Mo")).toBe("EE");
-      expect(parseFormat("Tu")).toBe("EE");
-      expect(parseFormat("We")).toBe("EE");
-      expect(parseFormat("Th")).toBe("EE");
-      expect(parseFormat("Fr")).toBe("EE");
-      expect(parseFormat("Sa")).toBe("EE");
+    test("should correctly parse full day names", () => {
+      const formats = getDateFormats("Sunday, March 10, 1990");
+      expect(formats).toEqual(["EEEE, MMMM dd, yyyy"]);
     });
-  });
 
-  describe("Ordinal numbers", () => {
-    it("should handle ordinal day numbers", () => {
-      expect(parseFormat("1st")).toBe("do");
-      expect(parseFormat("2nd")).toBe("do");
-      expect(parseFormat("3rd")).toBe("do");
-      expect(parseFormat("4th")).toBe("do");
-      expect(parseFormat("21st")).toBe("do");
-      expect(parseFormat("22nd")).toBe("do");
-      expect(parseFormat("23rd")).toBe("do");
-      expect(parseFormat("31st")).toBe("do");
+    test("should correctly parse short day names", () => {
+      const formats = getDateFormats("Sun Mar 10 1990");
+      expect(formats).toEqual(["EEE MMM dd yyyy"]);
+    });
+
+    test("should correctly parse 4-digit years", () => {
+      const formats = getDateFormats("10/03/2023");
+      expect(formats[0]).toContain("yyyy");
+    });
+
+    test("should correctly parse 2-digit years", () => {
+      const formats = getDateFormats("10/03/23");
+      expect(formats[0]).toContain("yy");
     });
   });
 
-  describe("Month names", () => {
-    it("should handle full month names", () => {
-      const months = [
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
-      ];
-      months.forEach((month) => {
-        expect(parseFormat(month)).toBe("MMMM");
+  describe("Time Format Detection", () => {
+    test("should correctly parse 24-hour time", () => {
+      const formats = getDateFormats("14:30:45");
+      expect(formats).toEqual(["HH:mm:ss"]);
+    });
+
+    test("should correctly parse 12-hour time with AM/PM", () => {
+      const formats = getDateFormats("2:30 PM");
+      expect(formats).toEqual(["h:mm aa"]);
+    });
+
+    test("should correctly parse zero-padded 12-hour time", () => {
+      const formats = getDateFormats("02:30:45 AM");
+      expect(formats).toEqual(["hh:mm:ss aa"]);
+    });
+
+    test("should correctly parse time without seconds", () => {
+      const formats = getDateFormats("14:30");
+      expect(formats).toEqual(["HH:mm"]);
+    });
+
+    test("should handle mixed date and time", () => {
+      const formats = getDateFormats("03/10/1990 2:30 PM");
+      expect(formats[0]).toBe("MM/dd/yyyy h:mm aa");
+    });
+  });
+
+  describe("Edge Cases and Validation", () => {
+    test("should throw error for empty string", () => {
+      expect(() => getDateFormats("")).toThrow(
+        "Input must be a non-empty string"
+      );
+    });
+
+    test("should throw error for null input", () => {
+      expect(() => getDateFormats(null as any)).toThrow(
+        "Input must be a non-empty string"
+      );
+    });
+
+    test("should throw error for undefined input", () => {
+      expect(() => getDateFormats(undefined as any)).toThrow(
+        "Input must be a non-empty string"
+      );
+    });
+
+    test("should handle single digit dates", () => {
+      const formats = getDateFormats("3/5/1990");
+      expect(formats[0]).toBe("M/d/yyyy");
+    });
+
+    test("should handle mixed padding", () => {
+      const formats = getDateFormats("03/5/1990");
+      expect(formats[0]).toBe("MM/d/yyyy");
+    });
+
+    test("should handle different separators", () => {
+      const formats1 = getDateFormats("03-10-1990");
+      const formats2 = getDateFormats("03.10.1990");
+      const formats3 = getDateFormats("03 10 1990");
+
+      expect(formats1[0]).toBe("MM-dd-yyyy");
+      expect(formats2[0]).toBe("MM.dd.yyyy");
+      expect(formats3[0]).toBe("MM dd yyyy");
+    });
+  });
+
+  describe("Ambiguity Detection", () => {
+    test("should detect ambiguity in MM/dd vs dd/MM", () => {
+      const result = parseDateStringToFormats("03/10/1990");
+      expect(result.hasAmbiguity).toBe(true);
+      expect(result.interpretations.length).toBe(2);
+    });
+
+    test("should not detect ambiguity when day > 12", () => {
+      const result = parseDateStringToFormats("12/25/1990");
+      expect(result.hasAmbiguity).toBe(false);
+      expect(result.interpretations.length).toBe(1);
+    });
+
+    test("should not detect ambiguity with month names", () => {
+      const result = parseDateStringToFormats("March 10, 1990");
+      expect(result.hasAmbiguity).toBe(false);
+      expect(result.interpretations.length).toBe(1);
+    });
+
+    test("should provide reasoning for interpretations", () => {
+      const result = parseDateStringToFormats("03/10/1990");
+      expect(result.interpretations[0].reasoning).toBeDefined();
+      expect(result.interpretations[0].reasoning.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("Confidence Scoring", () => {
+    test("should give higher confidence to US format", () => {
+      const result = parseDateStringToFormats("03/10/1990");
+      const usFormat = result.interpretations.find((i) => i.isUSFormat);
+      const nonUsFormat = result.interpretations.find((i) => !i.isUSFormat);
+
+      expect(usFormat?.confidence).toBeGreaterThan(
+        nonUsFormat?.confidence || 0
+      );
+    });
+
+    test("should give high confidence to unambiguous formats", () => {
+      const result = parseDateStringToFormats("March 10, 1990");
+      expect(result.interpretations[0].confidence).toBeGreaterThan(90);
+    });
+
+    test("should give lower confidence to ambiguous formats", () => {
+      const result = parseDateStringToFormats("03/10/1990");
+      result.interpretations.forEach((interp) => {
+        expect(interp.confidence).toBeLessThan(100);
       });
     });
+  });
 
-    it("should handle abbreviated month names (May is treated as full month)", () => {
-      const months = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-      ];
-      months.forEach((month) => {
-        expect(parseFormat(month)).toBe("MMM");
-      });
-      // May is special case - it's both full and abbreviated
-      expect(parseFormat("May")).toBe("MMMM");
+  describe("Token Information", () => {
+    test("should provide detailed token information", () => {
+      const result = parseDateStringToFormats("03/10/1990");
+      const tokens = result.interpretations[0].tokens;
+
+      expect(tokens).toHaveLength(3);
+      expect(tokens[0].originalValue).toBe("03");
+      expect(tokens[0].token).toBe("MM");
+      expect(tokens[0].position).toEqual([0, 2]);
+    });
+
+    test("should include token descriptions", () => {
+      const result = parseDateStringToFormats("March 10, 1990");
+      const tokens = result.interpretations[0].tokens;
+
+      expect(tokens[0].description).toContain("month");
     });
   });
 
-  describe("Timezone handling", () => {
-    it("should handle timezone names", () => {
-      expect(parseFormat("GMT")).toBe("[GMT]");
-      expect(parseFormat("UTC")).toBe("[UTC]");
-      expect(parseFormat("EST")).toBe("[EST]");
-      expect(parseFormat("PST")).toBe("[PST]");
+  describe("Complex Date Formats", () => {
+    test("should handle ISO-like formats", () => {
+      const formats = getDateFormats("1990-03-10");
+      expect(formats[0]).toBe("yyyy-MM-dd");
     });
 
-    it("should handle timezone offsets with colons", () => {
-      expect(parseFormat("+02:00")).toBe("XXX");
-      expect(parseFormat("-05:00")).toBe("XXX");
-      expect(parseFormat("+00:00")).toBe("XXX");
+    test("should handle European format with dots", () => {
+      const formats = getDateFormats("10.03.1990");
+      expect(formats[0]).toBe("MM.dd.yyyy"); // US format first
     });
 
-    it("should handle timezone offsets without colons", () => {
-      expect(parseFormat("+0200")).toBe("xx");
-      expect(parseFormat("-0500")).toBe("xx");
-      expect(parseFormat("+0000")).toBe("xx");
-    });
-  });
-
-  describe("Time patterns", () => {
-    it("should handle ISO8601 time with milliseconds", () => {
-      expect(parseFormat("23:39:43.331")).toBe("HH:mm:ss.SSS");
+    test("should handle long format with weekday", () => {
+      const formats = getDateFormats("Saturday, March 10, 1990");
+      expect(formats).toEqual(["EEEE, MMMM dd, yyyy"]);
     });
 
-    it("should handle ISO8601 time with centiseconds", () => {
-      expect(parseFormat("23:39:43.33")).toBe("HH:mm:ss.SS");
-    });
-
-    it("should handle ISO8601 time with deciseconds", () => {
-      expect(parseFormat("23:39:43.3")).toBe("HH:mm:ss.S");
-    });
-
-    it("should handle ISO8601 time with T prefix", () => {
-      expect(parseFormat("T23:39:43")).toBe("THH:mm:ss");
-    });
-
-    it("should handle 24-hour time formats", () => {
-      expect(parseFormat("05:30:20")).toBe("HH:mm:ss");
-      expect(parseFormat("23:30:20")).toBe("H:mm:ss");
-      expect(parseFormat("5:30:20")).toBe("H:mm:ss");
-    });
-
-    it("should handle time with milliseconds", () => {
-      expect(parseFormat("5:30:20.222")).toBe("H:mm:ss.SSS");
-    });
-
-    it("should handle time with centiseconds", () => {
-      expect(parseFormat("5:30:20.22")).toBe("H:mm:ss.SS");
-    });
-
-    it("should handle time with deciseconds", () => {
-      expect(parseFormat("5:30:20.2")).toBe("H:mm:ss.S");
-    });
-
-    it("should handle extended 24-hour time (function has issues with this)", () => {
-      // The function doesn't properly handle 24:00 formats - this is a known issue
-      expect(parseFormat("24:00:00.000")).toBe("HH:mm:ss.SSS");
-      expect(parseFormat("24:00:00.00")).toBe("HH:mm:ss.SS");
-      expect(parseFormat("24:00:00.0")).toBe("HH:mm:ss.S");
-      expect(parseFormat("24:00:00")).toBe("kk:mm:ss");
-      expect(parseFormat("24:00")).toBe("kk:mm");
-    });
-
-    it("should handle hours and minutes without seconds", () => {
-      expect(parseFormat("05:30")).toBe("HH:mm");
-      expect(parseFormat("23:30")).toBe("H:mm");
-      expect(parseFormat("5:30")).toBe("H:mm");
+    test("should handle timestamp-like format", () => {
+      const formats = getDateFormats("Mar 10 1990 14:30:45");
+      expect(formats).toEqual(["MMM dd yyyy HH:mm:ss"]);
     });
   });
 
-  describe("Date patterns with endian handling", () => {
-    it("should handle date formats with improved parsing", () => {
-      // The function now works much better after fixing the replaceEndian bug
-      expect(parseFormat("12/31/2023", { locale: "en-US" })).toBe("MM/dd/yyyy");
-      expect(parseFormat("1/1/2023", { locale: "en-US" })).toBe("M/d/yyyy");
-      expect(parseFormat("12/31/23", { locale: "en-US" })).toBe("MM/dd/yy");
+  describe("Time-only Formats", () => {
+    test("should handle various time formats", () => {
+      expect(getDateFormats("14:30")).toEqual(["HH:mm"]);
+      expect(getDateFormats("2:30")).toEqual(["H:mm"]);
+      expect(getDateFormats("02:30")).toEqual(["HH:mm"]);
+      expect(getDateFormats("14:30:45")).toEqual(["HH:mm:ss"]);
     });
 
-    it("should handle GB locale formats with improved parsing", () => {
-      expect(parseFormat("31/12/2023", { locale: "en-GB" })).toBe("dd/MM/yyyy");
-      expect(parseFormat("1/1/2023", { locale: "en-GB" })).toBe("d/M/yyyy");
-    });
-
-    it("should handle Japanese locale formats with improved parsing", () => {
-      expect(parseFormat("2023/12/31", { locale: "ja" })).toBe("yyyy/MM/dd");
-      expect(parseFormat("2023/1/1", { locale: "ja" })).toBe("yyyy/M/d");
+    test("should handle AM/PM variations", () => {
+      expect(getDateFormats("2:30 PM")).toEqual(["h:mm aa"]);
+      expect(getDateFormats("2:30 pm")).toEqual(["h:mm aa"]);
+      expect(getDateFormats("02:30 AM")).toEqual(["hh:mm aa"]);
     });
   });
 
-  describe("Dash-separated dates with 4-digit years (regression tests)", () => {
-    it("should correctly parse MM-dd-yyyy format", () => {
-      expect(parseFormat("05-15-2012")).toBe("MM-dd-yyyy");
-      expect(parseFormat("01-15-2012")).toBe("MM-dd-yyyy");
-      expect(parseFormat("12-31-2012")).toBe("MM-dd-yyyy");
+  describe("Performance and Edge Cases", () => {
+    test("should handle very long date strings", () => {
+      const longDate = "Sunday, the 10th of March, in the year 1990";
+      // Should not crash, even if it doesn't parse perfectly
+      expect(() => getDateFormats(longDate)).not.toThrow();
     });
 
-    it("should correctly parse M-d-yyyy format", () => {
-      expect(parseFormat("5-15-2012")).toBe("M-d-yyyy");
-      expect(parseFormat("1-5-2012")).toBe("M-d-yyyy");
-      expect(parseFormat("12-5-2012")).toBe("M-d-yyyy");
+    test("should handle numbers that could be confused", () => {
+      // Test edge case where numbers could be hours, minutes, days, months
+      const formats = getDateFormats("12:12:12");
+      expect(formats[0]).toBe("HH:mm:ss");
     });
 
-    it("should handle different locales correctly", () => {
-      expect(parseFormat("05-15-2012", { locale: "en-US" })).toBe("MM-dd-yyyy");
-      expect(parseFormat("05-15-2012", { locale: "en-GB" })).toBe("dd-MM-yyyy");
-      expect(parseFormat("05-15-2012", { locale: "ja" })).toBe("MM-dd-yyyy");
+    test("should handle single numbers", () => {
+      const formats = getDateFormats("1990");
+      expect(formats).toEqual(["yyyy"]);
     });
 
-    it("should handle 2-digit years", () => {
-      expect(parseFormat("05-15-12")).toBe("MM-dd-yy");
-      expect(parseFormat("5-15-12")).toBe("M-d-yy");
-    });
-
-    it("should handle year-first format", () => {
-      expect(parseFormat("2012-05-15")).toBe("yyyy-MM-dd");
-      expect(parseFormat("2012-5-15")).toBe("yyyy-M-d");
-      expect(parseFormat("2012-05-5")).toBe("yyyy-MM-d");
-    });
-
-    it("should handle day-first format when day > 12", () => {
-      expect(parseFormat("15-05-2012")).toBe("MM-dd-yyyy");
-      expect(parseFormat("25-12-2012")).toBe("MM-dd-yyyy");
-      expect(parseFormat("31-01-2012")).toBe("MM-dd-yyyy");
+    test("should preserve original formatting characters", () => {
+      const formats = getDateFormats("03/10/1990 @ 2:30 PM");
+      expect(formats[0]).toBe("MM/dd/yyyy @ h:mm aa");
     });
   });
 
-  describe("Edge cases and ambiguous dates", () => {
-    it("should handle dates where day > 12 with improved parsing", () => {
-      expect(parseFormat("25/12/2023")).toBe("MM/dd/yyyy");
-      expect(parseFormat("01/13/2023")).toBe("MM/dd/yyyy");
+  describe("Return Value Structure", () => {
+    test("parseDateStringToFormats should return correct structure", () => {
+      const result = parseDateStringToFormats("03/10/1990");
+
+      expect(result).toHaveProperty("originalString");
+      expect(result).toHaveProperty("interpretations");
+      expect(result).toHaveProperty("hasAmbiguity");
+      expect(result.originalString).toBe("03/10/1990");
+      expect(Array.isArray(result.interpretations)).toBe(true);
+      expect(typeof result.hasAmbiguity).toBe("boolean");
     });
 
-    it("should handle years in first position with improved parsing", () => {
-      expect(parseFormat("2023/12/31")).toBe("yyyy/MM/dd");
-      expect(parseFormat("2023/1/1")).toBe("yyyy/M/d");
-    });
+    test("each interpretation should have required properties", () => {
+      const result = parseDateStringToFormats("03/10/1990");
+      const interp = result.interpretations[0];
 
-    it("should handle two-digit years with improved parsing", () => {
-      expect(parseFormat("23/12/31")).toBe("dd/MM/yy");
-      expect(parseFormat("12/31/23")).toBe("MM/dd/yy");
-      expect(parseFormat("31/12/23")).toBe("dd/MM/yy");
-    });
-  });
+      expect(interp).toHaveProperty("format");
+      expect(interp).toHaveProperty("confidence");
+      expect(interp).toHaveProperty("reasoning");
+      expect(interp).toHaveProperty("tokens");
+      expect(interp).toHaveProperty("isUSFormat");
 
-  describe("Special date patterns", () => {
-    it("should handle month name with short year", () => {
-      expect(parseFormat("January-23")).toBe("MMMM-yy");
-      expect(parseFormat("Jan-23")).toBe("MMM-yy");
-    });
-
-    it("should handle day/month combinations", () => {
-      expect(parseFormat("1/1")).toBe("d/M");
-      expect(parseFormat("1/12")).toBe("d/MM");
-      expect(parseFormat("31/1")).toBe("dd/M");
-      expect(parseFormat("31/12")).toBe("dd/MM");
-    });
-
-    it("should handle month/year combinations", () => {
-      expect(parseFormat("1/23")).toBe("M/yy");
-      expect(parseFormat("12/23")).toBe("MM/yy");
-    });
-
-    it("should handle month/day combinations (parsing issues)", () => {
-      expect(parseFormat("1/01")).toBe("d/M");
-      expect(parseFormat("12/01")).toBe("dd/MM");
-    });
-  });
-
-  describe("Year handling", () => {
-    it("should handle 4-digit years", () => {
-      expect(parseFormat("2023")).toBe("yyyy");
-    });
-
-    it("should handle 2-digit years (parsing issues)", () => {
-      expect(parseFormat("23")).toBe("yy");
-    });
-
-    it("should handle years with apostrophe", () => {
-      expect(parseFormat("'23")).toBe("'yy");
-    });
-  });
-
-  describe("Hour patterns for time-only formats (parsing issues)", () => {
-    it("should handle naked hours at end of format", () => {
-      // The function has issues parsing single numbers as hours
-      expect(parseFormat("12")).toBe("yy"); // Treated as year
-      expect(parseFormat("00")).toBe("yy"); // Treated as year
-      expect(parseFormat("24")).toBe("yy"); // Treated as year
-      expect(parseFormat("13")).toBe("yy"); // Treated as year
-      expect(parseFormat("01")).toBe("yy");
-    });
-  });
-
-  describe("Dot time formats when month is present", () => {
-    it("should handle hour.minute when month format is included", () => {
-      const result = parseFormat("January 01.30");
-      expect(result).toContain("H.mm");
-    });
-
-    it("should handle single digit hour.minute when month format is included", () => {
-      const result = parseFormat("January 1.30");
-      expect(result).toContain("h.mm");
-    });
-  });
-
-  describe("All supported locales", () => {
-    it("should handle all defined locales", () => {
-      locales.forEach((locale) => {
-        const result = parseFormat("01/02/2023", { locale });
-        expect(result).toBeDefined();
-        expect(typeof result).toBe("string");
-      });
-    });
-
-    it("should fallback gracefully for unknown locales", () => {
-      const result = parseFormat("01/02/2023", { locale: "unknown" as any });
-      expect(result).toBeDefined();
-    });
-
-    it("should handle language-only locale codes", () => {
-      const result = parseFormat("01/02/2023", { locale: "fr" });
-      expect(result).toBeDefined();
-    });
-  });
-
-  describe("Error handling and edge cases", () => {
-    it("should handle malformed input gracefully", () => {
-      expect(parseFormat("not-a-date")).toBe("not-a-date");
-    });
-
-    it("should handle empty segments", () => {
-      expect(parseFormat("//")).toBeDefined();
-    });
-
-    it("should handle single characters", () => {
-      expect(parseFormat("a")).toBe("a");
-      expect(parseFormat("1")).toBe("1"); // Single digit not converted to hour
-    });
-
-    it("should handle special characters", () => {
-      expect(parseFormat("[]{}()")).toBe("[]{}()");
-    });
-  });
-
-  describe("Regex boundary cases", () => {
-    it("should handle formats that barely match regex patterns (parsing issues)", () => {
-      expect(parseFormat("1:1")).toBe("d:h"); // Not properly parsed as time
-      expect(parseFormat("12:59")).toBe("H:mm");
-      expect(parseFormat("23:59")).toBe("H:mm");
-    });
-
-    it("should handle formats at regex limits", () => {
-      expect(parseFormat("0:00")).toBe("H:mm");
-      expect(parseFormat("23:59:59")).toBe("H:mm:ss");
-    });
-  });
-
-  describe("AM/PM time patterns (function has significant issues)", () => {
-    it("should show current AM/PM parsing issues", () => {
-      // These tests document the current broken behavior with AM/PM parsing
-      expect(parseFormat("05:30:20pm")).toBe(
-        "hh:mm:ssh:mm:ssdd:h:mmd:hyypmaaaa"
-      );
-      expect(parseFormat("5:30:20pm")).toBe("h:mm:ssd:h:mmyy:h20pmaaa");
-      expect(parseFormat("05:30pm")).toBe("hh:mmh:mmdd:hdpmaaa");
-      expect(parseFormat("5pm")).toBe("hdpma");
-    });
-  });
-
-  describe("Complex date-time combinations (improved parsing)", () => {
-    it("should handle complex parsing correctly", () => {
-      expect(parseFormat("2023-12-31 23:59:59")).toBe("yyyy-MM-dd H:mm:ss");
-      expect(parseFormat("2023-12-31 23:59:59 GMT")).toBe(
-        "yyyy-MM-dd H:mm:ss [GMT]"
-      );
-      expect(parseFormat("2023-12-31 23:59:59 +02:00")).toBe(
-        "yyyy-MM-dd H:mm:ss XXX"
-      );
-      expect(parseFormat("Monday, January 1st, 2023 at 12:00 PM")).toMatch(
-        /EEEE, MMMM do, yyyy \[at\]/
-      );
+      expect(typeof interp.format).toBe("string");
+      expect(typeof interp.confidence).toBe("number");
+      expect(typeof interp.reasoning).toBe("string");
+      expect(Array.isArray(interp.tokens)).toBe(true);
+      expect(typeof interp.isUSFormat).toBe("boolean");
     });
   });
 });
