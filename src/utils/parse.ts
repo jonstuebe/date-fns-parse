@@ -87,15 +87,9 @@ const DEFINITIVE_PATTERNS: TokenPattern[] = [
     type: "weekday",
   },
   {
-    regex: /\b(AM|PM)\b/i,
+    regex: /\b(AM|PM|am|pm)\b/i,
     token: "aa",
-    description: "AM/PM uppercase",
-    type: "ampm",
-  },
-  {
-    regex: /\b(am|pm)\b/,
-    token: "aa",
-    description: "AM/PM (will be uppercase in output)",
+    description: "AM/PM",
     type: "ampm",
   },
   {
@@ -389,31 +383,14 @@ function buildInterpretation(
   reasoning: string,
   isUSFormat: boolean
 ): FormatInterpretation {
-  let formatString = "";
-  let lastEnd = 0;
-
-  // Sort matches by start position
-  const sortedMatches = [...matches].sort((a, b) => a.start - b.start);
+  let formatString = dateString;
+  const sortedMatches = [...matches].sort((a, b) => b.start - a.start);
 
   for (const match of sortedMatches) {
-    // Add any literal text before this match, escaped in single quotes
-    if (match.start > lastEnd) {
-      const literalText = dateString.substring(lastEnd, match.start);
-      // Escape literal characters, but preserve existing single quotes and common separators
-      const escapedLiteral = escapeLiteralText(literalText);
-      formatString += escapedLiteral;
-    }
-
-    // Add the token
-    formatString += match.token;
-    lastEnd = match.end;
-  }
-
-  // Add any remaining literal text
-  if (lastEnd < dateString.length) {
-    const remainingText = dateString.substring(lastEnd);
-    const escapedRemaining = escapeLiteralText(remainingText);
-    formatString += escapedRemaining;
+    formatString =
+      formatString.substring(0, match.start) +
+      match.token +
+      formatString.substring(match.end);
   }
 
   return {
@@ -430,36 +407,13 @@ function buildInterpretation(
   };
 }
 
-function escapeLiteralText(text: string): string {
-  // Don't escape common separators and whitespace
-  const commonSeparators = /^[\s\/\-\.\,\:\;]+$/;
-  if (commonSeparators.test(text)) {
-    return text;
-  }
-
-  // Don't escape if it's already escaped or empty
-  if (!text || (text.startsWith("'") && text.endsWith("'"))) {
-    return text;
-  }
-
-  // Check if text contains any latin alphabet characters that need escaping
-  const needsEscaping = /[a-zA-Z]/.test(text);
-  if (needsEscaping) {
-    // Escape single quotes within the text by doubling them
-    const escapedInner = text.replace(/'/g, "''");
-    return `'${escapedInner}'`;
-  }
-
-  return text;
-}
-
 function parseDateStringToFormats(dateString: string): ParseResult {
-  if (dateString.length === 0) {
-    return {
-      originalString: dateString,
-      interpretations: [],
-      hasAmbiguity: false,
-    };
+  if (
+    !dateString ||
+    typeof dateString !== "string" ||
+    dateString.trim().length === 0
+  ) {
+    throw new Error("Input must be a non-empty string");
   }
 
   const definitiveMatches: MatchResult[] = [];
