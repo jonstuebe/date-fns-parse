@@ -770,7 +770,6 @@ interface ReplaceEndianOptions {
 
 function replaceEndian(
   options: ReplaceEndianOptions,
-  match: string,
   first: string,
   separator: string,
   second: string,
