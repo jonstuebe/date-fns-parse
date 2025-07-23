@@ -770,6 +770,7 @@ interface ReplaceEndianOptions {
 
 function replaceEndian(
   options: ReplaceEndianOptions,
+  match: string,
   first: string,
   separator: string,
   second: string,
@@ -820,6 +821,8 @@ function replaceEndian(
     }
   };
 
+  // PRIORITY 1: Check for years first (most definitive)
+
   // If first is a year, order will always be Year-Month-Day
   if (firstNum > 31) {
     inferSingleDigitStatus(SECOND, THIRD);
@@ -829,7 +832,35 @@ function replaceEndian(
     return parts.join(separator);
   }
 
-  // If first is a month, then the order will be Day-Month-Year
+  // if third is a year ...
+  if (thirdNum > 31) {
+    parts[2] = thirdHasQuadDigit ? "yyyy" : "yy";
+
+    // Use the preferred order to determine month and day positions
+    if (preferredOrder === "YMD") {
+      // For YMD format, when year is in third position, we have M-D-Y
+      inferSingleDigitStatus(FIRST, SECOND);
+      parts[0] = isSingleDigitMap[FIRST] ? "M" : "MM";
+      parts[1] = isSingleDigitMap[SECOND] ? "d" : "dd";
+      return parts.join(separator);
+    } else if (preferredOrder === "MDY") {
+      // For MDY format, when year is in third position, we have M-D-Y
+      inferSingleDigitStatus(FIRST, SECOND);
+      parts[0] = isSingleDigitMap[FIRST] ? "M" : "MM";
+      parts[1] = isSingleDigitMap[SECOND] ? "d" : "dd";
+      return parts.join(separator);
+    } else {
+      // For DMY format, when year is in third position, we have D-M-Y
+      inferSingleDigitStatus(FIRST, SECOND);
+      parts[0] = isSingleDigitMap[FIRST] ? "d" : "dd";
+      parts[1] = isSingleDigitMap[SECOND] ? "M" : "MM";
+      return parts.join(separator);
+    }
+  }
+
+  // PRIORITY 2: Check for obvious days (> 12) when no year is detected
+
+  // If first is a day (> 12), then the order will be Day-Month-Year
   if (firstNum > 12) {
     inferSingleDigitStatus(FIRST, SECOND);
     parts[0] = isSingleDigitMap[FIRST] ? "d" : "dd";
@@ -845,25 +876,6 @@ function replaceEndian(
     parts[0] = isSingleDigitMap[FIRST] ? "M" : "MM";
     parts[1] = isSingleDigitMap[SECOND] ? "d" : "dd";
     parts[2] = thirdHasQuadDigit ? "yyyy" : "yy";
-    return parts.join(separator);
-  }
-
-  // if third is a year ...
-  if (thirdNum > 31) {
-    parts[2] = thirdHasQuadDigit ? "yyyy" : "yy";
-
-    // ... try to find day in first and second.
-    // If found, the remaining part is the month.
-    if (preferredOrder[0] === "M" && firstNum < 13) {
-      inferSingleDigitStatus(FIRST, SECOND);
-      parts[0] = isSingleDigitMap[FIRST] ? "M" : "MM";
-      parts[1] = isSingleDigitMap[SECOND] ? "d" : "dd";
-      return parts.join(separator);
-    }
-
-    inferSingleDigitStatus(FIRST, SECOND);
-    parts[0] = isSingleDigitMap[FIRST] ? "d" : "dd";
-    parts[1] = isSingleDigitMap[SECOND] ? "M" : "MM";
     return parts.join(separator);
   }
 
